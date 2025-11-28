@@ -4,6 +4,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Optional
+import shutil
 
 import pandas as pd
 from django.conf import settings
@@ -68,80 +69,49 @@ def _build_result_path(job: TenderJob) -> Path:
     return out_dir / filename
 
 
-def run_abcp_pricing(job: TenderJob) -> Optional[Path]:
+def run_abcp_pricing(job: TenderJob) -> None:
     """
-    Главная функция этапа 1: берёт job, запускает проценку через ABCP API
-    и возвращает путь к созданному XLSX либо None в случае ошибки.
+    Заглушка «проценки» по API ABCP.
 
-    Внутрь этой функции мы встроим твой текущий скрипт API_v2,
-    адаптировав его под Django.
+    Сейчас она просто копирует входной XLSX-файл в media/tender_results/
+    и прописывает путь в job.result_file.
+
+    Позже сюда можно будет подставить реальный код проценки.
     """
-    # 1. Базовая проверка конфигурации
-    if not _ensure_env(job):
-        return None
-
-    if not job.input_file:
-        _append_log(job, "Ошибка: у задачи нет прикреплённого входного файла.")
-        job.status = TenderJob.STATUS_ERROR
-        job.save(update_fields=["status"])
-        return None
-
+    media_root = Path(settings.MEDIA_ROOT)
     input_path = Path(job.input_file.path)
-    if not input_path.exists():
-        _append_log(job, f"Ошибка: входной файл не найден: {input_path}")
-        job.status = TenderJob.STATUS_ERROR
-        job.save(update_fields=["status"])
-        return None
 
-    profile_id = job.client_profile.profile_id
-    _append_log(job, f"Старт проценки по API ABCP для profileId={profile_id}")
-    _append_log(job, f"Входной файл: {input_path}")
+    # Каталог для результатов
+    result_dir = media_root / "tender_results"
+    result_dir.mkdir(parents=True, exist_ok=True)
 
-    # 2. Путь для результата
-    result_path = _build_result_path(job)
+    # Имя выходного файла
+    result_path = result_dir / f"job_{job.id}_abcp_result.xlsx"
 
-    # 3. Здесь НУЖНО перенести твой код из API_v2.py
-    #    Основная идея:
-    #      - читаем input_path через pandas
-    #      - проверяем наличие колонок brand / sku / qty
-    #      - делаем уникальные запросы (brand, sku, qty)
-    #      - для каждого запроса вызываем ABCP /search/articles/
-    #      - парсим JSON и собираем DataFrame по структуре, как раньше
-    #      - сохраняем result_path в Excel с листами Data и Errors
-    #
-    # Ниже — ЗАГЛУШКА, чтобы код не падал.
-    # Вместо неё ты вставишь свою реальную логику.
+    logger.info(
+        "Старт проценки по API ABCP для profileId=%s\nВходной файл: %s",
+        job.client_profile.profile_id,
+        input_path,
+    )
 
     try:
-        # Пример чтения файла и проверки колонок
-        df = pd.read_excel(input_path)
-        required_cols = {"brand", "sku", "qty"}
-        if not required_cols.issubset(df.columns.str.lower()):
-            _append_log(
-                job,
-                f"Заглушка: не найдены все обязательные колонки {required_cols} "
-                f"в файле {input_path.name}. Реальная логика ещё не перенесена.",
-            )
-            # Пишем пустой файл, чтобы ссылка result_file всё же была
-            empty = pd.DataFrame({"message": ["Проценка ещё не реализована (заглушка)."]})
-            with pd.ExcelWriter(result_path, engine="openpyxl") as writer:
-                empty.to_excel(writer, sheet_name="Info", index=False)
+        # ----- заглушка: просто копируем входной файл -----
+        shutil.copy2(input_path, result_path)
 
-        # В РЕАЛЬНОЙ версии здесь будет:
-        # from .your_old_module import process_file
-        # process_file(input_path, profile_id, result_path, job_logger=_append_log)
+        # относительный путь от MEDIA_ROOT -> в FileField нужно именно его
+        rel_path = os.path.relpath(result_path, media_root)
+        # Django сам склеит MEDIA_ROOT + name
+        job.result_file.name = rel_path.replace("\\", "/")
 
-    except Exception as exc:  # noqa: BLE001
-        _append_log(job, f"Исключение при выполнении проценки: {exc!r}")
+        job.status = TenderJob.STATUS_DONE
+        job.log = (job.log or "") + f"\nOK: файл результата сохранён в {result_path}"
+        logger.info("Проценка завершена, результат: %s", result_path)
+
+    except Exception as exc:
+        msg = f"Ошибка во время проценки: {exc!r}"
         job.status = TenderJob.STATUS_ERROR
-        job.save(update_fields=["status"])
-        return None
+        job.log = (job.log or "") + "\n" + msg
+        logger.exception(msg)
 
-    # 4. Если дошли сюда — считаем, что всё ок
-    rel_path = result_path.relative_to(settings.MEDIA_ROOT)
-    job.result_file.name = str(rel_path).replace("\\", "/")
-    job.status = TenderJob.STATUS_DONE
-    job.save(update_fields=["result_file", "status"])
-
-    _append_log(job, f"Проценка завершена, результат: {result_path}")
-    return result_path
+    finally:
+        job.save(update_fields=["status", "log", "result_file"])

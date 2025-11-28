@@ -1,5 +1,6 @@
-from django.db import models
 from django.contrib.auth import get_user_model
+from django.conf import settings
+from django.db import models
 
 User = get_user_model()
 
@@ -15,40 +16,23 @@ class ClientProfile(models.Model):
     def __str__(self):
         return f"{self.name} (profileId={self.profile_id})"
 
+from django.conf import settings
+from django.db import models
+
 
 class TenderJob(models.Model):
-    """
-    Задача проценки: какой пользователь загрузил какой файл, под каким profileId,
-    где лежат входной и выходной файлы.
-    """
-    created_at = models.DateTimeField(auto_now_add=True)
-    created_by = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Пользователь"
-    )
-
-    client_profile = models.ForeignKey(
-        ClientProfile, on_delete=models.PROTECT, verbose_name="Профиль клиента"
-    )
-
-    # Входной файл (brand, sku, qty)
-    input_file = models.FileField(
-        upload_to="tender/input/",
-        verbose_name="Входной файл (brand/sku/qty)",
-    )
-
-    # Результирующий файл (abcp_tender_search_structured_*.xlsx)
-    output_file = models.FileField(
-        upload_to="tender/output/",
-        verbose_name="Результат проценки",
-        null=True,
-        blank=True,
-    )
-
-    # --- КОНСТАНТЫ СТАТУСОВ ---
+    # ✅ 1. Статусы задачи
+    # Было у тебя: STATUS_NEW, STATUS_IN_PROGRESS, STATUS_DONE, STATUS_ERROR
+    # Сделал:
+    #   - STATUS_PROCESSING, потому что он используется во views.py
+    #   - STATUS_IN_PROGRESS оставил как алиас для обратной совместимости
     STATUS_NEW = "new"
-    STATUS_PROCESSING = "processing"
+    STATUS_PROCESSING = "in_progress"   # строковое значение оставили тем же
     STATUS_DONE = "done"
     STATUS_ERROR = "error"
+
+    # Алиас — если где-то в коде ещё остался STATUS_IN_PROGRESS, он не сломается
+    STATUS_IN_PROGRESS = STATUS_PROCESSING
 
     STATUS_CHOICES = [
         (STATUS_NEW, "Новая"),
@@ -57,6 +41,24 @@ class TenderJob(models.Model):
         (STATUS_ERROR, "Ошибка"),
     ]
 
+    # ✅ 2. КТО и КОГДА создал задачу
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="tender_jobs",
+        verbose_name="Пользователь",
+    )
+
+    # ✅ 3. Профиль клиента (profileId)
+    client_profile = models.ForeignKey(
+        "ClientProfile",
+        on_delete=models.CASCADE,
+        related_name="tender_jobs",
+        verbose_name="Профиль клиента",
+    )
+
+    # ✅ 4. Текущий статус
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
@@ -64,13 +66,34 @@ class TenderJob(models.Model):
         verbose_name="Статус",
     )
 
-    error_message = models.TextField("Текст ошибки", blank=True)
+    # ✅ 5. Входной файл (исходный XLSX менеджера)
+    input_file = models.FileField(
+        upload_to="tenders/input/",
+        verbose_name="Входной XLSX-файл",
+    )
 
-    log = models.TextField(blank=True, default="")
+    # ✅ 6. Результирующий файл (abcp_tender_search_structured_*.xlsx)
+    result_file = models.FileField(
+        upload_to="tenders/output/",
+        blank=True,
+        null=True,
+        verbose_name="Результирующий XLSX-файл",
+    )
 
-    def __str__(self):
-        return f"TenderJob #{self.id} ({self.client_profile})"
+    # ✅ 7. Лог выполнения задачи (сюда пишет run_abcp_pricing)
+    log = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Лог выполнения",
+    )
 
+    class Meta:
+        verbose_name = "Задача проценки"
+        verbose_name_plural = "Задачи проценки"
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Задача #{self.pk} ({self.get_status_display()})"
 
 class LoginCode(models.Model):
     """
