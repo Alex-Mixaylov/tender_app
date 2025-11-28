@@ -44,15 +44,24 @@ class TenderJob(models.Model):
         blank=True,
     )
 
-    # Статус задачи (на будущее, если решим делать очереди / асинхрон)
+    # --- КОНСТАНТЫ СТАТУСОВ ---
+    STATUS_NEW = "new"
+    STATUS_PROCESSING = "processing"
+    STATUS_DONE = "done"
+    STATUS_ERROR = "error"
+
     STATUS_CHOICES = [
-        ("new", "Новая"),
-        ("processing", "В обработке"),
-        ("done", "Готово"),
-        ("error", "Ошибка"),
+        (STATUS_NEW, "Новая"),
+        (STATUS_PROCESSING, "В обработке"),
+        (STATUS_DONE, "Готово"),
+        (STATUS_ERROR, "Ошибка"),
     ]
+
     status = models.CharField(
-        max_length=20, choices=STATUS_CHOICES, default="new", verbose_name="Статус"
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_NEW,
+        verbose_name="Статус",
     )
 
     error_message = models.TextField("Текст ошибки", blank=True)
