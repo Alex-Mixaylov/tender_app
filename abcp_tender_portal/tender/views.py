@@ -31,6 +31,7 @@ def login_step1(request: HttpRequest) -> HttpResponse:
             except User.DoesNotExist:
                 form.add_error("email", "Пользователь с таким e-mail не найден.")
             else:
+                # 6-значный код
                 code = f"{random.randint(0, 999999):06d}"
 
                 LoginCode.objects.create(
@@ -38,8 +39,11 @@ def login_step1(request: HttpRequest) -> HttpResponse:
                     code=code,
                 )
 
-                logger.info(f"2FA-код для пользователя {user.username} ({email}): {code}")
+                logger.info(
+                    f"2FA-код для пользователя {user.username} ({email}): {code}"
+                )
 
+                # сохраняем id в сессии для шага 2
                 request.session["2fa_user_id"] = user.id
                 return redirect("tender:login_step2")
     else:
@@ -67,11 +71,16 @@ def login_step2(request: HttpRequest) -> HttpResponse:
             code = form.cleaned_data["code"].strip()
 
             now = timezone.now()
-            valid_from = now - timedelta(minutes=15)
+            valid_from = now - timedelta(minutes=15)  # код живёт 15 минут
 
             login_code = (
                 LoginCode.objects
-                .filter(user=user, code=code, is_used=False, created_at__gte=valid_from)
+                .filter(
+                    user=user,
+                    code=code,
+                    is_used=False,
+                    created_at__gte=valid_from,
+                )
                 .order_by("-created_at")
                 .first()
             )
@@ -90,7 +99,11 @@ def login_step2(request: HttpRequest) -> HttpResponse:
         form = CodeConfirmForm()
 
     # передаём user в шаблон, чтобы показать e-mail/username
-    return render(request, "tender/login_step2.html", {"form": form, "user": user})
+    return render(
+        request,
+        "tender/login_step2.html",
+        {"form": form, "user": user},
+    )
 
 
 @login_required
@@ -98,7 +111,12 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     """
     Простейший дашборд.
     """
-    latest_jobs = TenderJob.objects.select_related("client", "user").order_by("-created_at")[:10]
+    # здесь важно использовать реальные имена полей ForeignKey:
+    latest_jobs = (
+        TenderJob.objects
+        .select_related("client_profile", "created_by")
+        .order_by("-created_at")[:10]
+    )
 
     context = {
         "latest_jobs": latest_jobs,
@@ -110,7 +128,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
 def tender_step1(request: HttpRequest) -> HttpResponse:
     """
     Этап 1: форма загрузки XLSX + список последних задач.
-    Пока только создаём TenderJob и сохраняем файл; запуск ABCP-скрипта добавим позже.
+    Сейчас только создаём TenderJob и сохраняем файл.
     """
     if request.method == "POST":
         form = TenderStep1Form(request.POST, request.FILES)
@@ -118,17 +136,20 @@ def tender_step1(request: HttpRequest) -> HttpResponse:
             client_profile = form.cleaned_data["client_profile"]
             input_file = form.cleaned_data["input_file"]
 
+            # ВАЖНО: используем поля client_profile и created_by,
+            # а не вымышленные client / user.
             job = TenderJob.objects.create(
-                client=client_profile,
-                user=request.user,
-                input_file=input_file,   # FileField сам сохранит файл в MEDIA_ROOT
+                client_profile=client_profile,
+                created_by=request.user,
+                input_file=input_file,   # FileField сохранит файл в MEDIA_ROOT
                 status="new",
                 log="Задача создана через веб-интерфейс.",
             )
 
             messages.success(
                 request,
-                f"Задача #{job.id} создана. Файл загружен, можно запускать проценку после интеграции с API.",
+                f"Задача #{job.id} создана. Файл загружен, "
+                f"после интеграции с API можно будет запускать проценку.",
             )
             return redirect("tender:tender_step1")
     else:
@@ -136,7 +157,7 @@ def tender_step1(request: HttpRequest) -> HttpResponse:
 
     jobs = (
         TenderJob.objects
-        .select_related("client", "user")
+        .select_related("client_profile", "created_by")
         .order_by("-created_at")[:20]
     )
 

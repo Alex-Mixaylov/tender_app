@@ -57,6 +57,8 @@ class TenderJob(models.Model):
 
     error_message = models.TextField("Текст ошибки", blank=True)
 
+    log = models.TextField(blank=True, default="")
+
     def __str__(self):
         return f"TenderJob #{self.id} ({self.client_profile})"
 

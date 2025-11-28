@@ -57,8 +57,8 @@
                         {% for job in jobs %}
                             <tr>
                                 <td>{{ job.id }}</td>
-                                <td>{{ job.client.name }}</td>
-                                <td>{{ job.client.abcp_profile_id }}</td>
+                                <td>{{ job.client_profile.name }}</td>
+                                <td>{{ job.client_profile.profile_id }}</td>
                                 <td>{{ job.get_status_display }}</td>
                                 <td>
                                     {% if job.input_file %}

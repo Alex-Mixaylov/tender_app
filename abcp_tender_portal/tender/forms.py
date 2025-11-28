@@ -1,5 +1,4 @@
 from django import forms
-from django.core.validators import FileExtensionValidator
 
 from .models import ClientProfile
 
@@ -7,7 +6,7 @@ from .models import ClientProfile
 class EmailLoginForm(forms.Form):
     email = forms.EmailField(
         label="E-mail",
-        widget=forms.EmailInput(attrs={"class": "form-control", "placeholder": "you@example.com"}),
+        help_text="Укажите e-mail, зарегистрированный в портале.",
     )
 
 
@@ -15,24 +14,26 @@ class CodeConfirmForm(forms.Form):
     code = forms.CharField(
         label="Код подтверждения",
         max_length=6,
-        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "123456"}),
+        widget=forms.TextInput(attrs={"autocomplete": "one-time-code"}),
+        help_text="6-значный код из письма / лога.",
     )
 
 
 class TenderStep1Form(forms.Form):
     """
-    Форма для Этапа 1:
-    - выбор клиентского профиля (profileId для ABCP)
-    - загрузка Excel-файла с колонками brand / sku / qty
+    Форма для Этапа 1: выбор client_profile (profileId) + загрузка XLSX.
     """
+
     client_profile = forms.ModelChoiceField(
         label="Клиентский профиль (profileId)",
-        queryset=ClientProfile.objects.filter(is_active=True).order_by("name"),
-        widget=forms.Select(attrs={"class": "form-select"}),
+        queryset=ClientProfile.objects.all().order_by("name"),
+        help_text="Выберите, под каким клиентским профилем выполнять проценку.",
     )
 
     input_file = forms.FileField(
-        label="Excel-файл (brand / sku / qty)",
-        validators=[FileExtensionValidator(allowed_extensions=["xls", "xlsx"])],
-        widget=forms.ClearableFileInput(attrs={"class": "form-control"}),
+        label="Входной XLSX-файл",
+        help_text="Файл с колонками brand / sku / qty.",
+        widget=forms.ClearableFileInput(
+            attrs={"accept": ".xlsx,.xls"}
+        ),
     )
