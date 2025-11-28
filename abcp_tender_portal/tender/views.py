@@ -11,6 +11,8 @@ from django.utils import timezone
 
 from .forms import EmailLoginForm, CodeConfirmForm, TenderStep1Form
 from .models import LoginCode, TenderJob
+from .services.abcp_step1 import run_abcp_pricing
+
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -127,42 +129,58 @@ def dashboard(request: HttpRequest) -> HttpResponse:
 @login_required
 def tender_step1(request: HttpRequest) -> HttpResponse:
     """
-    Этап 1: форма загрузки XLSX + список последних задач.
-    Сейчас только создаём TenderJob и сохраняем файл.
+    Этап 1: форма загрузки XLSX и запуск проценки по API ABCP.
+    Пока проценка реализована заглушкой в run_abcp_pricing().
     """
     if request.method == "POST":
         form = TenderStep1Form(request.POST, request.FILES)
         if form.is_valid():
             client_profile = form.cleaned_data["client_profile"]
-            input_file = form.cleaned_data["input_file"]
+            upload = form.cleaned_data["input_file"]
 
-            # ВАЖНО: используем поля client_profile и created_by,
-            # а не вымышленные client / user.
             job = TenderJob.objects.create(
-                client_profile=client_profile,
                 created_by=request.user,
-                input_file=input_file,   # FileField сохранит файл в MEDIA_ROOT
-                status="new",
-                log="Задача создана через веб-интерфейс.",
+                client_profile=client_profile,
+                input_file=upload,
+                status=TenderJob.STATUS_NEW,
+                log="",
             )
 
-            messages.success(
-                request,
-                f"Задача #{job.id} создана. Файл загружен, "
-                f"после интеграции с API можно будет запускать проценку.",
-            )
+            # Ставим статус "в обработке"
+            job.status = TenderJob.STATUS_PROCESSING
+            job.save(update_fields=["status"])
+
+            # Синхронно запускаем проценку
+            run_abcp_pricing(job)
+
+            # Перечитываем задачу из базы (мог измениться статус/лог/файл результата)
+            job.refresh_from_db()
+
+            if job.status == TenderJob.STATUS_DONE:
+                msg = (
+                    f"Задача #{job.id} выполнена. "
+                    f"Результат можно скачать в таблице справа."
+                )
+            else:
+                msg = (
+                    f"Задача #{job.id} создана, но возникла ошибка. "
+                    f"Смотрите лог в админке."
+                )
+
+            messages.success(request, msg)
             return redirect("tender:tender_step1")
     else:
         form = TenderStep1Form()
 
-    jobs = (
+    # Последние задачи для правого блока
+    last_jobs = (
         TenderJob.objects
         .select_related("client_profile", "created_by")
-        .order_by("-created_at")[:20]
+        .order_by("-created_at")[:10]
     )
 
     context = {
         "form": form,
-        "jobs": jobs,
+        "last_jobs": last_jobs,
     }
     return render(request, "tender/tender_step1.html", context)
