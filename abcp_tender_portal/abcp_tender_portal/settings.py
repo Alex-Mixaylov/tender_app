@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 import os
+import logging
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -142,3 +143,28 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 DEFAULT_FROM_EMAIL = "no-reply@abcp-tender-portal.local"
+
+
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "loggers": {
+        # наш логгер из tender.views (logger = logging.getLogger(__name__))
+        "tender": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        # можно ещё общий корневой логгер включить, если нужно
+        "": {
+            "handlers": ["console"],
+            "level": "INFO",
+        },
+    },
+}

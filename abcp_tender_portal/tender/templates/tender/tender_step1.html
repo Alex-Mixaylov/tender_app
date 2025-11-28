@@ -1,8 +1,88 @@
 {% extends "base.html" %}
-{% block title %}Этап 1 — Проценка{% endblock %}
+{% load django_bootstrap5 %}
+
+{% block title %}Этап 1 — Проценка по API ABCP{% endblock %}
 
 {% block content %}
-<h2 class="mb-3">Этап 1 — Проценка по API ABCP</h2>
+<h1 class="mb-4">Этап 1 — Проценка по API ABCP</h1>
 
-<p>Позже здесь будет форма загрузки Excel и запуск скрипта (API_v2).</p>
+{# сообщения Django messages #}
+{% if messages %}
+    <div class="mb-3">
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} mb-2" role="alert">
+                {{ message }}
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                Загрузка файла и создание задачи
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    {% bootstrap_form form %}
+                    <button type="submit" class="btn btn-primary">
+                        Создать задачу
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                Последние задачи
+            </div>
+            <div class="card-body">
+                {% if jobs %}
+                    <table class="table table-sm align-middle">
+                        <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Клиент</th>
+                            <th>profileId</th>
+                            <th>Статус</th>
+                            <th>Входной файл</th>
+                            <th>Результат</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for job in jobs %}
+                            <tr>
+                                <td>{{ job.id }}</td>
+                                <td>{{ job.client.name }}</td>
+                                <td>{{ job.client.abcp_profile_id }}</td>
+                                <td>{{ job.get_status_display }}</td>
+                                <td>
+                                    {% if job.input_file %}
+                                        <a href="{{ job.input_file.url }}" target="_blank">скачать</a>
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if job.output_file %}
+                                        <a href="{{ job.output_file.url }}" target="_blank">xlsx</a>
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p class="text-muted mb-0">Пока задач нет.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
