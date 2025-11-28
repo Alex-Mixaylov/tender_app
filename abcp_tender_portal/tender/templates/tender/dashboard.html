@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Портал проценки{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Портал проценки тендеров</h1>
+
+<p>Здесь позже появится аккордеон с этапами.</p>
+
+<a href="{% url 'tender:tender_step1' %}" class="btn btn-primary">
+    Этап 1 — загрузка файла и проценка
+</a>
+{% endblock %}

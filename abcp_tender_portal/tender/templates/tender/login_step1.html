@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% load django_bootstrap5 %}
+
+{% block title %}Вход — шаг 1{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-5">
+        <div class="card shadow-sm">
+            <div class="card-header text-center">
+                <h4 class="mb-0">Вход (шаг 1)</h4>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">
+                    Укажите e-mail, зарегистрированный в системе.
+                    На него будет отправлен код подтверждения
+                    (пока код пишем в лог).
+                </p>
+
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    {% bootstrap_form form %}
+
+                    <div class="d-grid mt-3">
+                        <button type="submit" class="btn btn-primary">
+                            Отправить код
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <p class="text-center text-muted mt-3">
+            Django 2FA mock · только для внутреннего пользования
+        </p>
+    </div>
+</div>
+{% endblock %}
