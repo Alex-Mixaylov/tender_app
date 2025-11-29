@@ -1,89 +1,47 @@
-{% extends "base.html" %}
-{% load django_bootstrap5 %}
-
-{% block title %}Этап 1 — Проценка по API ABCP{% endblock %}
-
-{% block content %}
-<h1 class="mb-4">Этап 1 — Проценка по API ABCP</h1>
-
-{# сообщения Django messages #}
-{% if messages %}
-  {% for message in messages %}
-    <div class="alert alert-{{ message.tags }} mb-3">
-      {{ message }}
+<div class="card-body">
+  {% if last_jobs %}
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Клиент</th>
+            <th>profileId</th>
+            <th>Статус</th>
+            <th>Входной файл</th>
+            <th>Результат</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in last_jobs %}
+            <tr>
+              <td>{{ job.id }}</td>
+              <td>{{ job.client_profile.name }}</td>
+              <td>{{ job.client_profile.profile_id }}</td>
+              <td>{{ job.get_status_display }}</td>
+              <td>
+                {% if job.input_file %}
+                  <a href="{{ job.input_file.url }}" target="_blank">скачать</a>
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>
+                {% if job.result_file %}
+                  <a href="{{ job.result_file.url }}" target="_blank">скачать</a>
+                {% elif job.status == job.STATUS_ERROR %}
+                  <span class="text-danger"
+                        title="{{ job.log|truncatechars:120 }}">ошибка</span>
+                {% else %}
+                  <span class="text-muted">ожидает</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-  {% endfor %}
-{% endif %}
-
-<div class="row">
-  <div class="col-md-7">
-    <div class="card mb-4">
-      <div class="card-header">
-        Загрузка файла и создание задачи
-      </div>
-      <div class="card-body">
-        <form method="post" enctype="multipart/form-data">
-          {% csrf_token %}
-          {% bootstrap_form form %}
-          <button type="submit" class="btn btn-primary">Создать задачу</button>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-md-5">
-    <div class="card mb-4">
-      <div class="card-header">
-        Последние задачи
-      </div>
-      <div class="card-body">
-        {% if recent_jobs %}
-          <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Клиент</th>
-                  <th>profileId</th>
-                  <th>Статус</th>
-                  <th>Входной файл</th>
-                  <th>Результат</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for job in recent_jobs %}
-                  <tr>
-                    <td>{{ job.id }}</td>
-                    <td>{{ job.client_profile.name }}</td>
-                    <td>{{ job.client_profile.profile_id }}</td>
-                    <td>{{ job.get_status_display }}</td>
-                    <td>
-                      {% if job.input_file %}
-                        <a href="{{ job.input_file.url }}" target="_blank">скачать</a>
-                      {% else %}
-                        —
-                      {% endif %}
-                    </td>
-                    <td>
-                      {% if job.result_file %}
-                        <a href="{{ job.result_file.url }}" target="_blank">скачать</a>
-                      {% elif job.status == job.STATUS_ERROR %}
-                        <span class="text-danger"
-                              title="{{ job.log|truncatechars:120 }}">ошибка</span>
-                      {% else %}
-                        <span class="text-muted">ожидает</span>
-                      {% endif %}
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        {% else %}
-          <p class="text-muted mb-0">Пока задач нет.</p>
-        {% endif %}
-      </div>
-    </div>
-  </div>
+  {% else %}
+    <p class="text-muted mb-0">Пока задач нет.</p>
+  {% endif %}
 </div>
-{% endblock %}
