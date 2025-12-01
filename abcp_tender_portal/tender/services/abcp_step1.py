@@ -20,17 +20,22 @@ logger = logging.getLogger(__name__)
 # Явно грузим .env из BASE_DIR
 load_dotenv(os.path.join(settings.BASE_DIR, ".env"))
 
-ABCP_HOST = os.getenv("ABCP_HOST", "").rstrip("/")
+_raw_host = os.getenv("ABCP_HOST", "").strip()
+# подстрахуемся: если забыли схему — считаем, что https
+if _raw_host and not _raw_host.startswith(("http://", "https://")):
+    _raw_host = "https://" + _raw_host
+
+ABCP_HOST = _raw_host.rstrip("/")
 ABCP_USERLOGIN = os.getenv("ABCP_USERLOGIN", "")
-# В ABCP обычно ожидается md5 пароля; здесь считаем, что в .env уже лежит нужное значение
+# В ABCP обычно ожидается md5 пароля; считаем, что в .env уже лежит нужное значение
 ABCP_USERPSW = os.getenv("ABCP_USERPSW", "")
 
 
 def _append_log(job: TenderJob, message: str) -> None:
     """
     Пишет сообщение в logger и в job.log + сохраняет задачу.
-    Важно: сохраняет ВСЕ поля job (без update_fields) — это удобно,
-    т.к. перед вызовом можно поменять status/result_file.
+    Сохраняем все поля job (без update_fields), чтобы обновления статуса/файла
+    точно попали в БД.
     """
     logger.info(message)
     job.log = (job.log or "") + message + "\n"
@@ -71,8 +76,6 @@ def detect_columns(df: pd.DataFrame) -> Tuple[str, str, Optional[str]]:
       - бренд
       - артикул
       - количество (qty) — опционально
-
-    Логика полностью взята из API_v2.py.
     """
     lower_cols = {col: str(col).lower().strip() for col in df.columns}
 
@@ -140,32 +143,40 @@ def build_search_params(
 def extract_stock_name(item: dict) -> str:
     """
     Пытается вытащить название/идентификатор склада из ответа по позиции.
-    Пробуем разные возможные ключи.
+
+    По данным техподдержки ABCP, название склада — это название маршрута
+    поставщика в поле supplierDescription. Оно может содержать HTML-теги,
+    поэтому мы их вычищаем.
     """
-    stock_name = (
+    raw = (
         item.get("officeName")
         or item.get("stockName")
         or item.get("warehouseName")
         or item.get("storageName")
         or item.get("deliveryOffice")
+        or item.get("supplierDescription")  # ← главное поле
     )
 
-    if stock_name:
+    if not raw:
         logger.debug(
-            "Склад найден для %s %s: %s",
-            item.get("brand"),
-            item.get("number"),
-            stock_name,
-        )
-    else:
-        logger.debug(
-            "Склад НЕ найден в позиции %s %s. Доступные ключи: %s",
+            "Склад НЕ найден в позиции %s %s. Ключи: %s",
             item.get("brand"),
             item.get("number"),
             list(item.keys()),
         )
+        return ""
 
-    return stock_name or ""
+    # Убираем HTML-разметку типа <span>...</span><br> и лишние пробелы
+    cleaned = re.sub(r"<[^>]+>", " ", str(raw))
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+    logger.debug(
+        "Склад найден для %s %s: %s",
+        item.get("brand"),
+        item.get("number"),
+        cleaned,
+    )
+    return cleaned
 
 
 def extract_row_from_item(
@@ -261,7 +272,7 @@ def run_abcp_pricing(job: TenderJob) -> None:
          - Data (предложения)
          - Errors (по каким запросам ничего не найдено / ошибка API).
       6. Сохраняет результат в Excel:
-         MEDIA_ROOT / "tenders/output/abcp_tender_search_job_<id>.xlsx
+         MEDIA_ROOT / "tenders/output/abcp_tender_search_job_<id>.xlsx"
          (листы Data и Errors).
       7. Обновляет job.result_file, job.status и job.log.
     """
