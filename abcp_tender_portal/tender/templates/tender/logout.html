@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% load django_bootstrap5 %}
+
+{% block title %}Выход{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Выход из портала</h1>
+
+<p>Вы действительно хотите выйти из портала проценки тендеров?</p>
+
+<form method="post" class="mt-3">
+  {% csrf_token %}
+  <button type="submit" class="btn btn-danger">Выйти</button>
+  <a href="{% url 'tender:dashboard' %}" class="btn btn-secondary ms-2">
+    Отмена
+  </a>
+</form>
+{% endblock %}

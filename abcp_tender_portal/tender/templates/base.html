@@ -16,7 +16,7 @@
             <span class="navbar-text me-3">
                 {{ user.username }}
             </span>
-            <a class="btn btn-outline-light btn-sm" href="/admin/logout/">Выйти</a>
+        <a class="btn btn-outline-light btn-sm" href="{% url 'tender:logout' %}">Выйти</a>
         {% endif %}
     </div>
 </nav>

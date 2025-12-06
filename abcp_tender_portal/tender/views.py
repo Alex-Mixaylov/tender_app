@@ -13,6 +13,9 @@ from .forms import EmailLoginForm, CodeConfirmForm, TenderStep1Form
 from .models import LoginCode, TenderJob
 from .services.abcp_step1 import run_abcp_pricing
 
+from django.contrib.auth import logout
+from django.views.decorators.http import require_http_methods
+
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -184,3 +187,20 @@ def tender_step1(request: HttpRequest) -> HttpResponse:
         "last_jobs": last_jobs,
     }
     return render(request, "tender/tender_step1.html", context)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def logout_view(request: HttpRequest) -> HttpResponse:
+    """
+    Выход пользователя из портала.
+
+    GET  -> показываем страницу подтверждения выхода (logout.html)
+    POST -> выходим и кидаем на шаг 1 авторизации.
+    """
+    if request.method == "POST":
+        logout(request)
+        messages.success(request, "Вы вышли из системы.")
+        return redirect("tender:login_step1")
+
+    return render(request, "tender/logout.html")

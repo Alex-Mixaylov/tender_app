@@ -178,6 +178,24 @@ def extract_stock_name(item: dict) -> str:
     )
     return cleaned
 
+def extract_deadline_text(item: dict) -> str:
+    """
+    Возвращает человекочитаемый срок поставки по позиции.
+
+    Логика:
+    - если есть непустой deadlineReplace — используем его;
+    - иначе считаем, что это режим «на складе».
+    """
+    raw = item.get("deadlineReplace")
+    if raw:
+        # На всякий случай вырежем HTML-теги и лишние пробелы
+        cleaned = re.sub(r"<[^>]+>", " ", str(raw))
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        if cleaned:
+            return cleaned
+
+    return "на складе"
+
 
 def extract_row_from_item(
     item: dict,
@@ -188,6 +206,7 @@ def extract_row_from_item(
 ) -> Dict[str, str]:
     """Формирует строку для листа Data."""
     stock_name = extract_stock_name(item)
+    deadline_text = extract_deadline_text(item)
 
     return {
         "Запрашиваемый бренд": rq_brand,
@@ -204,6 +223,7 @@ def extract_row_from_item(
         ),
         "Профиль": profile_id,
         "Склад": stock_name,
+        "Срок": deadline_text,
         "Цена по профилю": (
             item.get("price")
             or item.get("priceOut")
@@ -403,6 +423,7 @@ def run_abcp_pricing(job: TenderJob) -> None:
         "Наличие",
         "Профиль",
         "Склад",
+        "Срок",
         "Цена по профилю",
     ]
 
@@ -441,9 +462,11 @@ def run_abcp_pricing(job: TenderJob) -> None:
                 "Описание",
                 "Запрашиваемое кол-во",
                 "Наличие",
+                "Цена по профилю",
+                "Срок",
                 "Профиль",
                 "Склад",
-                "Цена по профилю",
+
             ]
         ]
 
