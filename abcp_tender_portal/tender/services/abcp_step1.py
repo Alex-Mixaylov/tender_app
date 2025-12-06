@@ -154,7 +154,7 @@ def extract_stock_name(item: dict) -> str:
         or item.get("warehouseName")
         or item.get("storageName")
         or item.get("deliveryOffice")
-        or item.get("supplierDescription")  # ← главное поле
+        or item.get("supplierDescription")  # главное поле
     )
 
     if not raw:
@@ -178,6 +178,7 @@ def extract_stock_name(item: dict) -> str:
     )
     return cleaned
 
+
 def extract_deadline_text(item: dict) -> str:
     """
     Возвращает человекочитаемый срок поставки по позиции.
@@ -188,7 +189,6 @@ def extract_deadline_text(item: dict) -> str:
     """
     raw = item.get("deadlineReplace")
     if raw:
-        # На всякий случай вырежем HTML-теги и лишние пробелы
         cleaned = re.sub(r"<[^>]+>", " ", str(raw))
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
         if cleaned:
@@ -197,40 +197,87 @@ def extract_deadline_text(item: dict) -> str:
     return "на складе"
 
 
-def extract_row_from_item(
-    item: dict,
-    profile_id: str,
-    rq_brand: str,
-    rq_article: str,
-    rq_qty,
-) -> Dict[str, str]:
-    """Формирует строку для листа Data."""
-    stock_name = extract_stock_name(item)
-    deadline_text = extract_deadline_text(item)
+def extract_supplier_name(item: dict) -> str:
+    """
+    Возвращает код/ID поставщика для колонки 'Поставщик'.
 
-    return {
-        "Запрашиваемый бренд": rq_brand,
-        "Запрашиваемый артикул": rq_article,
-        "Бренд": item.get("brand") or item.get("brandFix") or rq_brand,
-        "Артикул": item.get("number") or item.get("numberFix") or rq_article,
-        "Описание": item.get("description") or "",
-        "Запрашиваемое кол-во": rq_qty if rq_qty is not None else "",
-        "Наличие": (
-            item.get("availability")
-            or item.get("rest")
-            or item.get("qty")
-            or ""
-        ),
-        "Профиль": profile_id,
-        "Склад": stock_name,
-        "Срок": deadline_text,
-        "Цена по профилю": (
-            item.get("price")
-            or item.get("priceOut")
-            or item.get("priceInSiteCurrency")
-            or ""
-        ),
+    Сейчас используем:
+    - distributorCode, если он задан (можно настроить в АВСР
+      как человекочитаемый код/имя);
+    - иначе подставляем distributorId как строку.
+    """
+    name = item.get("distributorCode")
+    if name:
+        return str(name)
+
+    dist_id = item.get("distributorId")
+    if dist_id is not None:
+        return str(dist_id)
+
+    return ""
+
+
+def extract_supplier_full_name(item: dict, distributors_map: Dict[int, str]) -> str:
+    """
+    Возвращает полное название поставщика (для колонки 'Название поставщика')
+    по distributorId через заранее загруженный словарь cp/distributors.
+    """
+    dist_id = item.get("distributorId")
+    if dist_id is None:
+        return ""
+
+    try:
+        return distributors_map.get(int(dist_id), "") or ""
+    except Exception:
+        return ""
+
+
+def load_distributors_map() -> Dict[int, str]:
+    """
+    Загружает список поставщиков через cp/distributors
+    и возвращает словарь {id: человекочитаемое_название}.
+    Берём publicName, если он есть, иначе name.
+    """
+    if not ABCP_HOST or not ABCP_USERLOGIN or not ABCP_USERPSW:
+        logger.warning(
+            "Невозможно загрузить cp/distributors: не заданы ABCP_HOST/USERLOGIN/USERPSW"
+        )
+        return {}
+
+    url = ABCP_HOST.rstrip("/") + "/cp/distributors"
+    params = {
+        "userlogin": ABCP_USERLOGIN,
+        "userpsw": ABCP_USERPSW,
     }
+
+    try:
+        r = requests.get(url, params=params, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+
+        if not isinstance(data, list):
+            logger.warning("Неожиданный формат ответа cp/distributors: %s", type(data))
+            return {}
+
+        result: Dict[int, str] = {}
+        for row in data:
+            try:
+                dist_id = row.get("id")
+                if dist_id is None:
+                    continue
+
+                name = row.get("publicName") or row.get("name") or str(dist_id)
+                result[int(dist_id)] = str(name)
+            except Exception:
+                # не валим весь список из-за одной кривой записи
+                continue
+
+        logger.info("Загружено поставщиков из cp/distributors: %s", len(result))
+        return result
+
+    except Exception as exc:
+        logger.error("Ошибка при запросе cp/distributors: %r", exc)
+        return {}
 
 
 def call_search_articles(
@@ -274,6 +321,62 @@ def normalize_article(s: str) -> str:
     s = str(s or "").upper()
     return re.sub(r"[\s\-./]", "", s)
 
+def format_profile_name(raw: str) -> str:
+    """
+    Обрезает хвост в последних скобках.
+    Пример:
+      'CPZ-2322 / Агропоставка МТ Мираторг (CPZ2322@CPZ2322.ru)'
+      -> 'CPZ-2322 / Агропоставка МТ Мираторг'
+    """
+    if not raw:
+        return ""
+    text = str(raw).strip()
+    # убираем последнее " ( ... )" в конце строки
+    cleaned = re.sub(r"\s*\([^()]*\)\s*$", "", text).strip()
+    return cleaned or text
+
+
+
+def extract_row_from_item(
+    item: dict,
+    profile_id: str,
+    rq_brand: str,
+    rq_article: str,
+    rq_qty,
+    distributors_map: Dict[int, str],
+) -> Dict[str, str]:
+    """Формирует строку для листа Data."""
+    stock_name = extract_stock_name(item)
+    deadline_text = extract_deadline_text(item)
+    supplier_name = extract_supplier_name(item)
+    supplier_full_name = extract_supplier_full_name(item, distributors_map)
+
+    return {
+        "Запрашиваемый бренд": rq_brand,
+        "Запрашиваемый артикул": rq_article,
+        "Бренд": item.get("brand") or item.get("brandFix") or rq_brand,
+        "Артикул": item.get("number") or item.get("numberFix") or rq_article,
+        "Описание": item.get("description") or "",
+        "Запрашиваемое кол-во": rq_qty if rq_qty is not None else "",
+        "Наличие": (
+            item.get("availability")
+            or item.get("rest")
+            or item.get("qty")
+            or ""
+        ),
+        "Расчет по профилю клиента": profile_id,
+        "Поставщик": supplier_name,              # код/ID поставщика
+        "Склад": stock_name,
+        "Название поставщика": supplier_full_name,  # полное имя из cp/distributors
+        "Срок": deadline_text,
+        "Цена по профилю": (
+            item.get("price")
+            or item.get("priceOut")
+            or item.get("priceInSiteCurrency")
+            or ""
+        ),
+    }
+
 
 # ----------------------------- Основная логика -----------------------------
 
@@ -286,15 +389,16 @@ def run_abcp_pricing(job: TenderJob) -> None:
       1. Проверяет .env (ABCP_HOST, ABCP_USERLOGIN, ABCP_USERPSW).
       2. Читает входной XLSX из job.input_file.
       3. Определяет колонки бренд / артикул / qty.
-      4. Формирует уникальные пары (brand, article, qty) и по каждой
+      4. Загружает список поставщиков (cp/distributors).
+      5. Формирует уникальные пары (brand, article, qty) и по каждой
          вызывает ABCP /search/articles/.
-      5. Собирает результаты в два DataFrame:
+      6. Собирает результаты в два DataFrame:
          - Data (предложения)
          - Errors (по каким запросам ничего не найдено / ошибка API).
-      6. Сохраняет результат в Excel:
+      7. Сохраняет результат в Excel:
          MEDIA_ROOT / "tenders/output/abcp_tender_search_job_<id>.xlsx"
          (листы Data и Errors).
-      7. Обновляет job.result_file, job.status и job.log.
+      8. Обновляет job.result_file, job.status и job.log.
     """
     _append_log(
         job,
@@ -340,6 +444,19 @@ def run_abcp_pricing(job: TenderJob) -> None:
         return
 
     profile_id = job.client_profile.profile_id
+    profile_label = format_profile_name(job.client_profile.name or "")
+
+
+    # 3.5. Загружаем список поставщиков один раз для задачи
+    distributors_map: Dict[int, str] = load_distributors_map()
+    if distributors_map:
+        _append_log(job, f"Загружено поставщиков из ABCP: {len(distributors_map)}")
+    else:
+        _append_log(
+            job,
+            "Не удалось получить список поставщиков через cp/distributors "
+            "или список пустой. Колонка 'Название поставщика' может быть пустой.",
+        )
 
     # 4. Формируем уникальные пары (brand, article, qty)
     if qty_col:
@@ -403,7 +520,12 @@ def run_abcp_pricing(job: TenderJob) -> None:
 
         for item in items:
             row = extract_row_from_item(
-                item, profile_id, brand, article, rq_qty
+                item,
+                profile_label,
+                brand,
+                article,
+                rq_qty,
+                distributors_map,
             )
             all_rows.append(row)
 
@@ -422,9 +544,11 @@ def run_abcp_pricing(job: TenderJob) -> None:
         "Запрашиваемое кол-во",
         "Наличие",
         "Профиль",
+        "Поставщик",
         "Склад",
+        "Название поставщика",  # сразу после "Склад"
         "Срок",
-        "Цена по профилю",
+        "Расчет по профилю клиента",
     ]
 
     if all_rows:
@@ -451,7 +575,7 @@ def run_abcp_pricing(job: TenderJob) -> None:
             "Запрашиваемое кол-во",
         ] = ""
 
-        # Переупорядочиваем колонки
+        # Переупорядочиваем колонки (в т.ч. "Название поставщика" после "Склад")
         df_data = df_data[
             [
                 "Запрашиваемый бренд",
@@ -464,8 +588,10 @@ def run_abcp_pricing(job: TenderJob) -> None:
                 "Наличие",
                 "Цена по профилю",
                 "Срок",
-                "Профиль",
                 "Склад",
+                "Поставщик",
+                "Название поставщика",
+                "Профиль",
 
             ]
         ]
