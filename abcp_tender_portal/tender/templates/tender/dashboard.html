@@ -1,125 +1,69 @@
 {% extends "base.html" %}
-{% load django_bootstrap5 %}
 
-{% block title %}Портал проценки тендеров{% endblock %}
+{% block title %}Тендерный кабинет{% endblock %}
 
 {% block content %}
-<h1 class="mb-4">Портал проценки тендеров</h1>
+<div class="cpz-page-header">
+  <h1 class="cpz-page-title">Тендерный кабинет</h1>
+  <p class="cpz-page-subtitle">
+    Быстрая проценка тендерных XLSX-файлов по ценам, наличию и срокам поставки из ABCP.
+  </p>
+</div>
 
-<div class="row">
-    <div class="col-md-8">
-        <div class="accordion" id="tenderStages">
+<div class="cpz-accordion">
+  <details class="cpz-accordion-item" open>
+    <summary class="cpz-accordion-header">
+      <span class="cpz-step-badge">Шаг 1</span>
+      <span class="cpz-accordion-title">Сбор данных (ABCP)</span>
+      <span class="cpz-accordion-summary-extra">
+        Загрузка XLSX и получение предложений
+      </span>
+    </summary>
+    <div class="cpz-accordion-body">
+      <p>
+        На этом этапе загружается исходный XLSX-файл с колонками
+        <strong>brand / sku / qty</strong>, выбирается клиентский профиль,
+        и создаётся задача на проценку через API ABCP.
+      </p>
+      <ul class="cpz-accordion-sublist">
+        <li>автоматическое определение колонок бренда, артикула и количества;</li>
+        <li>поиск предложений по каждому артикулу через <code>search/articles</code>;</li>
+        <li>формирование итогового файла с ценой, наличием, сроком и поставщиком.</li>
+      </ul>
 
-            <!-- Этап 1 — Сбор данных (ABCP) -->
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="headingStep1">
-                    <button class="accordion-button" type="button"
-                            data-bs-toggle="collapse"
-                            data-bs-target="#collapseStep1"
-                            aria-expanded="true"
-                            aria-controls="collapseStep1">
-                        Этап 1 — Сбор данных (ABCP)
-                    </button>
-                </h2>
-                <div id="collapseStep1"
-                     class="accordion-collapse collapse show"
-                     aria-labelledby="headingStep1"
-                     data-bs-parent="#tenderStages">
-                    <div class="accordion-body">
-                        <p>
-                            На этом этапе загружается исходный XLSX-файл с колонками
-                            <code>brand</code> / <code>sku</code> / <code>qty</code>,
-                            выбирается клиентский профиль (profileId), и создаётся задача
-                            на проценку через API ABCP.
-                        </p>
-                        <a href="{% url 'tender:tender_step1' %}"
-                           class="btn btn-primary">
-                            Перейти к этапу 1
-                        </a>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Этап 2 — Постобработка (placeholder) -->
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="headingStep2">
-                    <button class="accordion-button collapsed" type="button"
-                            data-bs-toggle="collapse"
-                            data-bs-target="#collapseStep2"
-                            aria-expanded="false"
-                            aria-controls="collapseStep2">
-                        Этап 2 — Постобработка результатов (Excel)
-                        <span class="badge bg-secondary ms-2">в разработке</span>
-                    </button>
-                </h2>
-                <div id="collapseStep2"
-                     class="accordion-collapse collapse"
-                     aria-labelledby="headingStep2"
-                     data-bs-parent="#tenderStages">
-                    <div class="accordion-body">
-                        <p>
-                            Здесь позже появится интерфейс для загрузки
-                            доработанного файла <code>abcp_tender_search_structured_*.xlsx</code>,
-                            его объединения с другими данными (ВПР и т.п.) и выгрузки финального
-                            файла для тендера.
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Этап 3 — резерв под будущее -->
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="headingStep3">
-                    <button class="accordion-button collapsed" type="button"
-                            data-bs-toggle="collapse"
-                            data-bs-target="#collapseStep3"
-                            aria-expanded="false"
-                            aria-controls="collapseStep3">
-                        Этап 3 — дополнительные сценарии
-                        <span class="badge bg-secondary ms-2">позже</span>
-                    </button>
-                </h2>
-                <div id="collapseStep3"
-                     class="accordion-collapse collapse"
-                     aria-labelledby="headingStep3"
-                     data-bs-parent="#tenderStages">
-                    <div class="accordion-body">
-                        <p>
-                            Резерв под будущие функции: альтернативные источники цен,
-                            спец-логика для отдельных клиентов, отчёты и т.п.
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-        </div>
+      <a href="{% url 'tender:tender_step1' %}"
+         class="btn btn-primary cpz-btn-primary">
+        Перейти к этапу 1
+      </a>
     </div>
+  </details>
 
-    <!-- Справа — последние задачи, как и было на step1 -->
-    <div class="col-md-4 mt-4 mt-md-0">
-        <h5>Последние задачи</h5>
-        {% if latest_jobs %}
-            <table class="table table-sm align-middle">
-                <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Клиент</th>
-                    <th>Статус</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% for job in latest_jobs %}
-                    <tr>
-                        <td>{{ job.id }}</td>
-                        <td>{{ job.client_profile.name }}</td>
-                        <td>{{ job.get_status_display }}</td>
-                    </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        {% else %}
-            <p class="text-muted">Пока задач нет.</p>
-        {% endif %}
+  {# задел на будущие шаги #}
+  <details class="cpz-accordion-item">
+    <summary class="cpz-accordion-header">
+      <span class="cpz-step-badge">Шаг 2</span>
+      <span class="cpz-accordion-title">Аналитика тендера</span>
+      <span class="cpz-accordion-summary-extra">В разработке</span>
+    </summary>
+    <div class="cpz-accordion-body">
+      <p class="text-muted mb-0">
+        Здесь позже появится сравнение предложений, выбор лучших поставщиков
+        и подготовка отчётов для клиента.
+      </p>
     </div>
+  </details>
+
+  <details class="cpz-accordion-item">
+    <summary class="cpz-accordion-header">
+      <span class="cpz-step-badge">Шаг 3</span>
+      <span class="cpz-accordion-title">Экспорт и интеграции</span>
+      <span class="cpz-accordion-summary-extra">В разработке</span>
+    </summary>
+    <div class="cpz-accordion-body">
+      <p class="text-muted mb-0">
+        Экспорт результатов в форматы поставщиков и интеграция с CRM/ERP.
+      </p>
+    </div>
+  </details>
 </div>
 {% endblock %}

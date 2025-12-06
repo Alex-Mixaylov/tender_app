@@ -4,7 +4,13 @@
 {% block title %}Этап 1 — Проценка по API ABCP{% endblock %}
 
 {% block content %}
-<h1 class="mb-4">Этап 1 — Проценка по API ABCP</h1>
+<div class="cpz-page-header">
+  <h1 class="cpz-page-title">Этап 1 — Проценка по API ABCP</h1>
+  <p class="cpz-page-subtitle">
+    Загрузка XLSX-файла и запуск проценки через API ABCP.
+  </p>
+</div>
+
 
 {# сообщения Django messages #}
 {% if messages %}
@@ -89,3 +95,84 @@
   </div>
 </div>
 {% endblock %}
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const select = document.getElementById('id_client_profile');
+  if (!select) return;
+
+  // обёртка
+  const wrapper = document.createElement('div');
+  wrapper.className = 'cpz-select-wrapper';
+
+  // прячем оригинальный select
+  select.classList.add('cpz-select-hidden');
+
+  const parent = select.parentNode;
+  parent.insertBefore(wrapper, select);
+  wrapper.appendChild(select);
+
+  // видимая часть
+  const display = document.createElement('div');
+  display.className = 'cpz-select-display';
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'cpz-select-dropdown';
+
+  const updateDisplay = () => {
+    const opt = select.options[select.selectedIndex];
+    display.textContent = opt ? opt.textContent : '';
+  };
+
+  // создаём опции для нашего списка
+  Array.from(select.options).forEach(function (opt) {
+    const item = document.createElement('div');
+    item.className = 'cpz-select-option';
+    item.dataset.value = opt.value;
+    item.textContent = opt.textContent;
+
+    if (opt.selected) {
+      item.classList.add('cpz-select-option--selected');
+    }
+
+    item.addEventListener('click', function (e) {
+      e.stopPropagation();
+      select.value = this.dataset.value;
+
+      // на всякий случай триггерим change
+      const evt = new Event('change', { bubbles: true });
+      select.dispatchEvent(evt);
+
+      dropdown.querySelectorAll('.cpz-select-option')
+        .forEach(function (el) {
+          el.classList.remove('cpz-select-option--selected');
+        });
+      this.classList.add('cpz-select-option--selected');
+
+      updateDisplay();
+      wrapper.classList.remove('cpz-select-open');
+    });
+
+    dropdown.appendChild(item);
+  });
+
+  updateDisplay();
+
+  wrapper.appendChild(display);
+  wrapper.appendChild(dropdown);
+
+  // открытие/закрытие списка
+  display.addEventListener('click', function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    wrapper.classList.toggle('cpz-select-open');
+  });
+
+  // клик вне селекта — закрываем
+  document.addEventListener('click', function () {
+    wrapper.classList.remove('cpz-select-open');
+  });
+});
+</script>
+{% endblock %}
+
