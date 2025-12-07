@@ -39,6 +39,15 @@ ALLOWED_HOSTS = os.environ.get(
     "127.0.0.1,localhost"
 ).split(",")
 
+# --- CSRF: доверенные Origin'ы для форм и AJAX ---
+_raw_csrf = os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "")
+if _raw_csrf:
+    CSRF_TRUSTED_ORIGINS = [
+        o.strip() for o in _raw_csrf.split(",") if o.strip()
+    ]
+else:
+    CSRF_TRUSTED_ORIGINS = []
+
 
 # Application definition
 
