@@ -40,13 +40,21 @@ ALLOWED_HOSTS = os.environ.get(
 ).split(",")
 
 # --- CSRF: доверенные Origin'ы для форм и AJAX ---
+# Базовый список — наши боевые домены
+CSRF_TRUSTED_ORIGINS = [
+    "https://alex-mixaylov-tender-app-a45f.twc1.net",
+    "https://api.cpzap.ru",
+]
+
+# Дополнительно можно расширить через переменную окружения
 _raw_csrf = os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "")
 if _raw_csrf:
-    CSRF_TRUSTED_ORIGINS = [
-        o.strip() for o in _raw_csrf.split(",") if o.strip()
-    ]
-else:
-    CSRF_TRUSTED_ORIGINS = []
+    extra = [o.strip() for o in _raw_csrf.split(",") if o.strip()]
+    CSRF_TRUSTED_ORIGINS.extend(extra)
+
+# Убираем дубли на всякий случай
+CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(CSRF_TRUSTED_ORIGINS))
+
 
 
 # Application definition
