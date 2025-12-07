@@ -106,25 +106,21 @@ WSGI_APPLICATION = 'abcp_tender_portal.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-#DATABASES = {
-#    'default': {
-#        'ENGINE': 'django.db.backends.sqlite3',
-#        'NAME': BASE_DIR / 'db.sqlite3',
-#    }
-#}
+# --- DATABASES ----------------------------------------------------------
 
-
-USE_POSTGRES = os.environ.get("DJANGO_USE_POSTGRES") == "1"
+# Если Timeweb/окружение даёт параметры PostgreSQL — используем его,
+# иначе остаёмся на локальном SQLite (для разработки).
+USE_POSTGRES = bool(os.environ.get("POSTGRESQL_HOST"))
 
 if USE_POSTGRES:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.environ.get("POSTGRES_DB"),
-            "USER": os.environ.get("POSTGRES_USER"),
-            "PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
-            "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
-            "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+            "NAME": os.environ.get("POSTGRESQL_DBNAME"),
+            "USER": os.environ.get("POSTGRESQL_USER"),
+            "PASSWORD": os.environ.get("POSTGRESQL_PASSWORD"),
+            "HOST": os.environ.get("POSTGRESQL_HOST"),
+            "PORT": os.environ.get("POSTGRESQL_PORT", "5432"),
         }
     }
 else:
@@ -134,7 +130,6 @@ else:
             "NAME": BASE_DIR / "db.sqlite3",
         }
     }
-
 
 
 # Password validation
