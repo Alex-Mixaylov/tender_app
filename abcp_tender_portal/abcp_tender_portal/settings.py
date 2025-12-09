@@ -42,7 +42,7 @@ ALLOWED_HOSTS = os.environ.get(
 # --- CSRF: доверенные Origin'ы для форм и AJAX ---
 # Базовый список — наши боевые домены
 CSRF_TRUSTED_ORIGINS = [
-    "https://alex-mixaylov-tender-app-a45f.twc1.net",
+    "https://alex-mixaylov-tender-app-c551.twc1.net/",
     "https://api.cpzap.ru",
 ]
 
