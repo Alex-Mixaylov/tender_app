@@ -186,8 +186,25 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-DEFAULT_FROM_EMAIL = "no-reply@abcp-tender-portal.local"
+# --- E-mail / SMTP --------------------------------------------------------
+
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "25"))
+
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+
+# ВАЖНО: одновременно True могут быть либо TLS, либо SSL, но не оба.
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "False") == "True"
+EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "False") == "True"
+
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL",
+    EMAIL_HOST_USER or "no-reply@abcp-tender-portal.local",
+)
+
 
 
 

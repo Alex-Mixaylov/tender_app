@@ -16,6 +16,10 @@ from .services.abcp_step1 import run_abcp_pricing
 from django.contrib.auth import logout
 from django.views.decorators.http import require_http_methods
 
+from django.core.mail import send_mail
+from django.conf import settings
+
+
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -24,7 +28,7 @@ User = get_user_model()
 def login_step1(request: HttpRequest) -> HttpResponse:
     """
     Шаг 1: ввод e-mail, генерация кода и запись в LoginCode.
-    Пока «отправку письма» имитируем записью кода в лог.
+    Теперь код отправляется на e-mail пользователя через SMTP.
     """
     if request.method == "POST":
         form = EmailLoginForm(request.POST)
@@ -48,9 +52,48 @@ def login_step1(request: HttpRequest) -> HttpResponse:
                     f"2FA-код для пользователя {user.username} ({email}): {code}"
                 )
 
-                # сохраняем id в сессии для шага 2
-                request.session["2fa_user_id"] = user.id
-                return redirect("tender:login_step2")
+                # Пытаемся отправить письмо
+                subject = "Код входа в ABCP Tender Portal"
+                message = (
+                    "Здравствуйте!\n\n"
+                    f"Ваш одноразовый код для входа: {code}\n\n"
+                    "Срок действия кода — 15 минут.\n\n"
+                    "Если вы не запрашивали вход, просто проигнорируйте это письмо."
+                )
+                from_email = settings.DEFAULT_FROM_EMAIL
+                recipient_list = [email]
+
+                try:
+                    send_mail(
+                        subject,
+                        message,
+                        from_email,
+                        recipient_list,
+                        fail_silently=False,
+                    )
+                except Exception as e:
+                    logger.error(
+                        "Ошибка отправки 2FA-кода пользователю %s (%s): %s",
+                        user.username,
+                        email,
+                        e,
+                        exc_info=True,
+                    )
+                    form.add_error(
+                        None,
+                        "Не удалось отправить письмо с кодом. "
+                        "Проверьте корректность e-mail или попробуйте позже.",
+                    )
+                else:
+                    # Сохраняем id пользователя в сессии только если письмо ушло
+                    request.session["2fa_user_id"] = user.id
+                    messages.success(
+                        request,
+                        f"Код подтверждения отправлен на {email}. "
+                        "Проверьте почту.",
+                    )
+                    return redirect("tender:login_step2")
+        # если дошли сюда — либо не POST, либо были ошибки в форме/отправке
     else:
         form = EmailLoginForm()
 
